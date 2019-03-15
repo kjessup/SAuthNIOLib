@@ -4,9 +4,9 @@
 import PackageDescription
 
 let package = Package(
-	name: "SAuthLib",
+	name: "SAuthNIOLib",
 	products: [
-		.library(name: "SAuthLib", targets: ["SAuthLib"])
+		.library(name: "SAuthNIOLib", targets: ["SAuthNIOLib"])
 	],
 	dependencies: [
 		.package(url: "https://github.com/kjessup/SAuthCodables.git", .branch("master")),
@@ -17,7 +17,7 @@ let package = Package(
 		.package(url: "https://github.com/PerfectlySoft/Perfect-SMTP.git", from: "4.0.0"),
 	],
 	targets: [
-		.target(name: "SAuthLib", dependencies: ["SAuthCodables",
+		.target(name: "SAuthNIOLib", dependencies: ["SAuthCodables",
 												 "PerfectSMTP",
 												 "PerfectNIOCompat",
 												 "PerfectCURL",
