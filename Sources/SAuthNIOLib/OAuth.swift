@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PerfectNIOCompat
+import PerfectNIO
 import SAuthCodables
 
 public enum OAuthProvider: String {
@@ -26,28 +26,25 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 		sauthDB = s
 	}
 	
-	public func oauthReturnHandler(request: HTTPRequest, response: HTTPResponse) {
+	public func oauthReturnHandler(request: HTTPRequest) -> HTTPOutput {
 		guard let uri = try? sauthDB.getURI(.oauthRedirect) else {
-			return response.setBody(string: "URIs not configured.")
-				.completed(status: .badRequest)
+			return ErrorOutput(status: .badRequest, description: "URIs not configured.")
 		}
-		let provider = request.urlVariables["provider"] ?? ""
-		let str = request.queryParams.map { "\($0.0.stringByEncodingURL)=\($0.1.stringByEncodingURL)" }.joined(separator: "&")
+		let provider = request.uriVariables["provider"] ?? ""
+		let str = request.searchArgs?.map { "\($0.0.stringByEncodingURL)=\($0.1.stringByEncodingURL)" }.joined(separator: "&") ?? ""
 		let url = "\(uri)\(provider)/?\(str)"
-		response.setHeader(.location, value: url)
-			.completed(status: .temporaryRedirect)
+		return BytesOutput(head: HTTPHead(status: .temporaryRedirect, headers: HTTPHeaders([("Location", url)])), body: [])
 	}
 	
-	public func oauthLoginHandler(request: HTTPRequest) throws -> TokenAcquiredResponse {
-		let provTok: OAuthProviderAndToken = try request.decode()
+	public func oauthLoginHandler(provTok: OAuthProviderAndToken) throws -> TokenAcquiredResponse {
 		guard let provider = OAuthProvider(rawValue: provTok.provider) else {
-			throw HTTPResponseError(status: .badRequest, description: "Bad provider.")
+			throw ErrorOutput(status: .badRequest, description: "Bad provider.")
 		}
 		switch provider {
 		case .google:
 			guard let gInfo = getGooglePlusData(provTok.token),
 				let address = gInfo.email else {
-				throw HTTPResponseError(status: .badRequest, description: "Unable to get Google profile info.")
+				throw ErrorOutput(status: .badRequest, description: "Unable to get Google profile info.")
 			}
 			let meta = AccountPublicMeta(fullName: gInfo.displayName)
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,
@@ -57,7 +54,7 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 			return tokenResponse
 		case .facebook:
 			guard let gInfo = getFacebookData(provTok.token) else {
-				throw HTTPResponseError(status: .badRequest, description: "Unable to get Facebook profile info.")
+				throw ErrorOutput(status: .badRequest, description: "Unable to get Facebook profile info.")
 			}
 			let meta = AccountPublicMeta(fullName: gInfo.name)
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,
@@ -67,7 +64,7 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 			return tokenResponse
 		case .linkedin:
 			guard let gInfo = getLinkedInData(provTok.token) else {
-				throw HTTPResponseError(status: .badRequest, description: "Unable to get LinkedIn profile info.")
+				throw ErrorOutput(status: .badRequest, description: "Unable to get LinkedIn profile info.")
 			}
 			let meta = AccountPublicMeta(fullName: "\(gInfo.firstName) \(gInfo.lastName)")
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,

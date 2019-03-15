@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PerfectNIOCompat
+import PerfectNIO
 import PerfectCrypto
 import PerfectCRUD
 import PerfectNotifications
@@ -44,11 +44,10 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	public init(_ s: S) {
 		sauthDB = s
 	}
-	public func register(request: HTTPRequest) throws -> AliasBrief {
-		let rrequest: AuthAPI.RegisterRequest = try request.decode()
-		let (account, alias) = try SAuth(sauthDB).createAccount(address: rrequest.email,
-																password: rrequest.password,
-																fullName: rrequest.fullName)
+	public func register(request: AuthAPI.RegisterRequest) throws -> AliasBrief {
+		let (account, alias) = try SAuth(sauthDB).createAccount(address: request.email,
+																password: request.password,
+																fullName: request.fullName)
 		let token = try addAliasValidationToken(address: alias.address, db: try sauthDB.getDB())
 		let aliasBrief = AliasBrief(alias)
 		do {
@@ -58,17 +57,16 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 		}
 		return aliasBrief
 	}
-	public func login(request: HTTPRequest) throws -> TokenAcquiredResponse {
-		let rrequest: AuthAPI.LoginRequest = try request.decode()
-		let tokenResponse = try SAuth(sauthDB).logIn(address: rrequest.email, password: rrequest.password)
+	public func login(request: AuthAPI.LoginRequest) throws -> TokenAcquiredResponse {
+		let tokenResponse = try SAuth(sauthDB).logIn(address: request.email, password: request.password)
 		let db = try sauthDB.getDB()
 		let table = db.table(PasswordResetToken.self)
-		try table.where(\PasswordResetToken.aliasId == rrequest.email.lowercased()).delete()
+		try table.where(\PasswordResetToken.aliasId == request.email.lowercased()).delete()
 		return tokenResponse
 	}
 	
 	private func getToken(authorization request: HTTPRequest) -> String? {
-		guard let bearer = request.header(.authorization), !bearer.isEmpty else {
+		guard let bearer = request.headers["authorization"].first, !bearer.isEmpty else {
 			return nil
 		}
 		let prefix = "Bearer "
@@ -82,7 +80,7 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	}
 	
 	private func getToken(cookie request: HTTPRequest) -> String? {
-		guard let token = request.cookies.first( where: { $0.0 == authCookieName })?.1, !token.isEmpty else {
+		guard let token = request.cookies[authCookieName], !token.isEmpty else {
 			return nil
 		}
 		return token
@@ -90,7 +88,7 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	
 	public func authenticated(request: HTTPRequest) throws -> AuthenticatedRequest {
 		guard let token = getToken(authorization: request) ?? getToken(cookie: request) else {
-			throw HTTPResponseError(status: .unauthorized, description: "No authorization provided.")
+			throw ErrorOutput(status: .unauthorized, description: "No authorization provided.")
 		}
 		do {
 			if let jwtVer = JWTVerifier(token) {
@@ -105,7 +103,7 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 				}
 			}
 		} catch {}
-		throw HTTPResponseError(status: .unauthorized, description: "Invalid authorization header provided.")
+		throw ErrorOutput(status: .unauthorized, description: "Invalid authorization header provided.")
 	}
 	public func getMe(request: AuthenticatedRequest) throws -> Account {
 		let account = try SAuth(sauthDB).getAccount(token: request.token)
@@ -113,17 +111,15 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	}
 	public func getMeMeta(request: AuthenticatedRequest) throws -> AccountPublicMeta {
 		guard let meta = try SAuth(sauthDB).getMeta(token: request.token) else {
-			throw HTTPResponseError(status: .unauthorized, description: "Unable to fetch meta data.")
+			throw ErrorOutput(status: .unauthorized, description: "Unable to fetch meta data.")
 		}
 		return meta
 	}
-	public func setMeMeta(request: AuthenticatedRequest) throws -> EmptyReply {
-		let meta: AccountPublicMeta = try request.request.decode()
+	public func setMeMeta(request: AuthenticatedRequest, meta: AccountPublicMeta) throws -> EmptyReply {
 		try SAuth(sauthDB).setMeta(token: request.token, meta: meta)
 		return EmptyReply()
 	}
-	public func addMobileDevice(request: AuthenticatedRequest) throws -> EmptyReply {
-		let addReq: AuthAPI.AddMobileDeviceRequest = try request.request.decode()
+	public func addMobileDevice(request: AuthenticatedRequest, addReq: AuthAPI.AddMobileDeviceRequest) throws -> EmptyReply {
 		let deviceId = addReq.deviceId
 		let db = try sauthDB.getDB()
 		let add = MobileDeviceId(deviceId: deviceId,
@@ -148,15 +144,14 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 }
 
 extension SAuthHandlers {
-	public func pwResetWeb(request: HTTPRequest, response: HTTPResponse) {
-		guard let token = request.urlVariables["token"], !token.isEmpty else {
-			return response.completed(status: .notFound)
+	public func pwResetWeb(request: HTTPRequest) throws -> HTTPOutput {
+		guard let token = request.uriVariables["token"], !token.isEmpty else {
+			return ErrorOutput(status: .notFound)
 		}
 		guard let tempForm = try? sauthDB.getTemplatePath(.passwordResetForm),
 			let tempErr = try? sauthDB.getTemplatePath(.passwordResetError) else {
-				return response.setBody(string: "Templates not configured.").completed(status: .badRequest)
+				return ErrorOutput(status: .badRequest, description: "Templates not configured.")
 		}
-		response.setHeader(.contentType, value: "text/html")
 		do {
 			let db = try sauthDB.getDB()
 			let table = db.table(PasswordResetToken.self)
@@ -164,7 +159,7 @@ extension SAuthHandlers {
 			let newToken = try db.transaction {
 				() -> PasswordResetToken? in
 				guard let resetToken = try whereToken.first() else {
-					throw HTTPResponseError(status: .notFound, description: "Token not found.")
+					throw ErrorOutput(status: .notFound, description: "Token not found.")
 				}
 				let addr = resetToken.aliasId
 				guard resetToken.expiration > Date().sauthTimeInterval else {
@@ -174,52 +169,50 @@ extension SAuthHandlers {
 				return resetToken
 			}
 			guard let newResetToken = newToken else {
-				throw HTTPResponseError(status: .notFound, description: "Token not found.")
+				throw ErrorOutput(status: .notFound, description: "Token not found.")
 			}
 			let dict: [String:Any] = ["token":newResetToken.authId, "address":newResetToken.aliasId]
-			response.renderMustache(template: tempForm, context: dict)
+			return try MustacheOutput(templatePath: tempForm, inputs: dict, contentType: "text/html")
 		} catch {
-			response.renderMustache(template: tempErr, context: ["error":error])
+			return try MustacheOutput(templatePath: tempErr, inputs: ["error":error], contentType: "text/html")
 		}
 	}
-	public func pwResetWebComplete(request: HTTPRequest, response: HTTPResponse) {
+	public func pwResetWebComplete(resetRequest: AuthAPI.PasswordResetCompleteRequest) throws -> HTTPOutput {
 		guard let tempOk = try? sauthDB.getTemplatePath(.passwordResetOk),
 			let tempErr = try? sauthDB.getTemplatePath(.passwordResetError) else {
-				return response.setBody(string: "Templates not configured.").completed(status: .badRequest)
+				return ErrorOutput(status: .internalServerError, description: "Templates not configured.")
 		}
-		response.setHeader(.contentType, value: "text/html")
 		do {
-			_ = try completePasswordReset(request: request)
-			response.renderMustache(template: tempOk)
+			_ = try completePasswordReset(resetRequest: resetRequest)
+			return try MustacheOutput(templatePath: tempOk, inputs: [:], contentType: "text/html")
 		} catch {
-			response.renderMustache(template: tempErr, context: ["error":error])
+			return try MustacheOutput(templatePath: tempErr, inputs: ["error":error], contentType: "text/html")
 		}
 	}
 }
 
 extension SAuthHandlers {
-	public func accountValidateWeb(request: HTTPRequest, response: HTTPResponse) {
-		guard let token = request.urlVariables["token"], !token.isEmpty else {
-			return response.completed(status: .notFound)
+	public func accountValidateWeb(request: HTTPRequest) throws -> HTTPOutput {
+		guard let token = request.uriVariables["token"], !token.isEmpty else {
+			return ErrorOutput(status: .notFound)
 		}
 		guard let tempOk = try? sauthDB.getTemplatePath(.accountValidationOk),
 			let tempErr = try? sauthDB.getTemplatePath(.accountValidationError) else {
-				return response.setBody(string: "Templates not configured.").completed(status: .badRequest)
+				return ErrorOutput(status: .badRequest, description: "Templates not configured.")
 		}
-		response.setHeader(.contentType, value: "text/html")
 		do {
 			let db = try sauthDB.getDB()
 			let validationTable = db.table(AccountValidationToken.self)
 			let aliasTable = db.table(AliasBrief.self)
 			let clause = validationTable.where(\AccountValidationToken.authId == token)
-			try db.transaction {
-				() -> () in
+			if let result = try db.transaction({
+				() -> HTTPOutput? in
 				guard let row = try clause.first() else {
-					return response.completed(status: .notFound)
+					return ErrorOutput(status: .notFound)
 				}
 				try clause.delete()
 				guard let alias = try aliasTable.where(\AliasBrief.address == row.aliasId).first() else {
-					return response.completed(status: .notFound)
+					return ErrorOutput(status: .notFound)
 				}
 				if alias.provisional {
 					let newAlias = AliasBrief(address: alias.address,
@@ -229,10 +222,13 @@ extension SAuthHandlers {
 											  defaultLocale: alias.defaultLocale)
 					try aliasTable.where(\AliasBrief.address == row.aliasId).update(newAlias, setKeys: \.flags)
 				}
+				return nil
+			}) {
+				return result
 			}
-			response.renderMustache(template: tempOk)
+			return try MustacheOutput(templatePath: tempOk, inputs: [:], contentType: "text/html")
 		} catch {
-			response.renderMustache(template: tempErr, context: ["error":error])
+			return try MustacheOutput(templatePath: tempErr, inputs: ["error":error], contentType: "text/html")
 		}
 	}
 }
@@ -248,12 +244,11 @@ extension SAuthHandlers {
 		return authId
 	}
 	
-	public func initiatePasswordReset(request: HTTPRequest) throws -> EmptyReply {
-		let resetRequest: AuthAPI.PasswordResetRequest = try request.decode()
+	public func initiatePasswordReset(resetRequest: AuthAPI.PasswordResetRequest) throws -> EmptyReply {
 		let loweredAddress = resetRequest.address.lowercased()
 		let db = try sauthDB.getDB()
 		guard let alias = try db.table(AliasBrief.self).where(\AliasBrief.address == loweredAddress).first() else {
-			throw HTTPResponseError(status: .badRequest, description: "Bad account alias.")
+			throw ErrorOutput(status: .badRequest, description: "Bad account alias.")
 		}
 		let authId = try db.transaction {
 			return try addPasswordResetToken(address: loweredAddress, db: db)
@@ -290,7 +285,7 @@ extension SAuthHandlers {
 										alias: AliasBrief,
 										db: Database<S.DBConfig>) throws -> EmptyReply {
 		guard let account = try db.table(Account.self).where(\Account.id == alias.account).first() else {
-			throw HTTPResponseError(status: .badRequest, description: "Bad account.")
+			throw ErrorOutput(status: .badRequest, description: "Bad account.")
 		}
 		try sauthDB.sendEmailPasswordReset(authToken: authId,
 										   account: account,
@@ -298,20 +293,19 @@ extension SAuthHandlers {
 		return EmptyReply()
 	}
 	
-	public func completePasswordReset(request: HTTPRequest) throws -> TokenAcquiredResponse {
-		let resetRequest: AuthAPI.PasswordResetCompleteRequest = try request.decode()
+	public func completePasswordReset(resetRequest: AuthAPI.PasswordResetCompleteRequest) throws -> TokenAcquiredResponse {
 		let loweredAddress = resetRequest.address.lowercased()
 		do {
 			let db = try sauthDB.getDB()
 			try db.transaction {
 				guard try db.table(Alias.self).where(\Alias.address == loweredAddress).count() == 1 else {
-					throw HTTPResponseError(status: .badRequest, description: "Bad account alias.")
+					throw ErrorOutput(status: .badRequest, description: "Bad account alias.")
 				}
 				let table = db.table(PasswordResetToken.self)
 				guard try table.where(\PasswordResetToken.aliasId == loweredAddress &&
 					\PasswordResetToken.authId == resetRequest.authToken &&
 					\PasswordResetToken.expiration > Date().sauthTimeInterval).count() == 1 else {
-						throw HTTPResponseError(status: .badRequest, description: "Bad password reset token.")
+						throw ErrorOutput(status: .badRequest, description: "Bad password reset token.")
 				}
 				try table.where(\PasswordResetToken.aliasId == loweredAddress).delete()
 			}
