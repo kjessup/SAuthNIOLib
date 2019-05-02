@@ -1,6 +1,4 @@
-// swift-tools-version:4.0
-// Generated automatically by Perfect Assistant 2
-// Date: 2018-03-02 17:48:07 +0000
+// swift-tools-version:5.0
 import PackageDescription
 
 let package = Package(
