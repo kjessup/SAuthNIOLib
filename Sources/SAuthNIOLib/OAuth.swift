@@ -36,7 +36,7 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 		return BytesOutput(head: HTTPHead(status: .temporaryRedirect, headers: HTTPHeaders([("Location", url)])), body: [])
 	}
 	
-	public func oauthLoginHandler(provTok: OAuthProviderAndToken) throws -> TokenAcquiredResponse {
+	public func oauthLoginHandler(provTok: OAuthProviderAndToken) throws -> TokenAcquiredResponse<S.MetaType> {
 		guard let provider = OAuthProvider(rawValue: provTok.provider) else {
 			throw ErrorOutput(status: .badRequest, description: "Bad provider.")
 		}
@@ -46,31 +46,31 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 				let address = gInfo.email else {
 				throw ErrorOutput(status: .badRequest, description: "Unable to get Google profile info.")
 			}
-			let meta = AccountPublicMeta(fullName: gInfo.displayName)
+//			let meta = AccountPublicMeta(fullName: gInfo.displayName)
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,
 								accessToken: provTok.token,
 								address: address,
-								meta: meta)
+								meta: nil as S.MetaType?)
 			return tokenResponse
 		case .facebook:
 			guard let gInfo = getFacebookData(provTok.token) else {
 				throw ErrorOutput(status: .badRequest, description: "Unable to get Facebook profile info.")
 			}
-			let meta = AccountPublicMeta(fullName: gInfo.name)
+//			let meta = AccountPublicMeta(fullName: gInfo.name)
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,
 																	  accessToken: provTok.token,
 																	  address: gInfo.email,
-																	  meta: meta)
+																	  meta: nil as S.MetaType?)
 			return tokenResponse
 		case .linkedin:
 			guard let gInfo = getLinkedInData(provTok.token) else {
 				throw ErrorOutput(status: .badRequest, description: "Unable to get LinkedIn profile info.")
 			}
-			let meta = AccountPublicMeta(fullName: "\(gInfo.firstName) \(gInfo.lastName)")
+//			let meta = AccountPublicMeta(fullName: "\(gInfo.firstName) \(gInfo.lastName)")
 			let tokenResponse = try SAuth(self.sauthDB).createOrLogIn(provider: provTok.provider,
 																	  accessToken: provTok.token,
 																	  address: gInfo.emailAddress,
-																	  meta: meta)
+																	  meta: nil as S.MetaType?)
 			return tokenResponse
 		}
 	}

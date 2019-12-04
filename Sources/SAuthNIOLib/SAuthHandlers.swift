@@ -22,10 +22,10 @@ public extension Date {
 	}
 }
 
-public struct AuthenticatedRequest {
+public struct AuthenticatedRequest<Meta: Codable> {
 	let request: HTTPRequest
 	let token: String
-	let account: Account
+	let account: Account<Meta>
 	let aliasId: String
 }
 
@@ -44,10 +44,10 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	public init(_ s: S) {
 		sauthDB = s
 	}
-	public func register(request: AuthAPI.RegisterRequest) throws -> AliasBrief {
+	public func register(request: AuthAPI.RegisterRequest<S.MetaType>) throws -> AliasBrief {
 		let (account, alias) = try SAuth(sauthDB).createAccount(address: request.email,
 																password: request.password,
-																fullName: request.fullName)
+																meta: request.meta)
 		let token = try addAliasValidationToken(address: alias.address, db: try sauthDB.getDB())
 		let aliasBrief = AliasBrief(alias)
 		do {
@@ -57,8 +57,10 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 		}
 		return aliasBrief
 	}
-	public func login(request: AuthAPI.LoginRequest) throws -> TokenAcquiredResponse {
-		let tokenResponse = try SAuth(sauthDB).logIn(address: request.email, password: request.password)
+	public func login(request: AuthAPI.LoginRequest) throws -> TokenAcquiredResponse<S.MetaType> {
+		let tokenResponse: TokenAcquiredResponse<S.MetaType> = try SAuth(sauthDB).logIn(
+			address: request.email,
+			password: request.password)
 		let db = try sauthDB.getDB()
 		let table = db.table(PasswordResetToken.self)
 		try table.where(\PasswordResetToken.aliasId == request.email.lowercased()).delete()
@@ -86,7 +88,7 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 		return token
 	}
 	
-	public func authenticated(request: HTTPRequest) throws -> AuthenticatedRequest {
+	public func authenticated(request: HTTPRequest) throws -> AuthenticatedRequest<S.MetaType> {
 		guard let token = getToken(authorization: request) ?? getToken(cookie: request) else {
 			throw ErrorOutput(status: .unauthorized, description: "No authorization provided.")
 		}
@@ -105,21 +107,21 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 		} catch {}
 		throw ErrorOutput(status: .unauthorized, description: "Invalid authorization header provided.")
 	}
-	public func getMe(request: AuthenticatedRequest) throws -> Account {
-		let account = try SAuth(sauthDB).getAccount(token: request.token)
+	public func getMe(request: AuthenticatedRequest<S.MetaType>) throws -> Account<S.MetaType> {
+		let account: Account<S.MetaType> = try SAuth(sauthDB).getAccount(token: request.token)
 		return account
 	}
-	public func getMeMeta(request: AuthenticatedRequest) throws -> AccountPublicMeta {
-		guard let meta = try SAuth(sauthDB).getMeta(token: request.token) else {
+	public func getMeMeta(request: AuthenticatedRequest<S.MetaType>) throws -> S.MetaType {
+		guard let meta: S.MetaType = try SAuth(sauthDB).getMeta(token: request.token) else {
 			throw ErrorOutput(status: .unauthorized, description: "Unable to fetch meta data.")
 		}
 		return meta
 	}
-	public func setMeMeta(request: AuthenticatedRequest, meta: AccountPublicMeta) throws -> EmptyReply {
+	public func setMeMeta(request: AuthenticatedRequest<S.MetaType>, meta: S.MetaType) throws -> EmptyReply {
 		try SAuth(sauthDB).setMeta(token: request.token, meta: meta)
 		return EmptyReply()
 	}
-	public func addMobileDevice(request: AuthenticatedRequest, addReq: AuthAPI.AddMobileDeviceRequest) throws -> EmptyReply {
+	public func addMobileDevice(request: AuthenticatedRequest<S.MetaType>, addReq: AuthAPI.AddMobileDeviceRequest) throws -> EmptyReply {
 		let deviceId = addReq.deviceId
 		let db = try sauthDB.getDB()
 		let add = MobileDeviceId(deviceId: deviceId,
@@ -284,7 +286,7 @@ extension SAuthHandlers {
 										authId: String,
 										alias: AliasBrief,
 										db: Database<S.DBConfig>) throws -> EmptyReply {
-		guard let account = try db.table(Account.self).where(\Account.id == alias.account).first() else {
+		guard let account = try db.table(Account<S.MetaType>.self).where(\Account<S.MetaType>.id == alias.account).first() else {
 			throw ErrorOutput(status: .badRequest, description: "Bad account.")
 		}
 		try sauthDB.sendEmailPasswordReset(authToken: authId,
@@ -293,7 +295,7 @@ extension SAuthHandlers {
 		return EmptyReply()
 	}
 	
-	public func completePasswordReset(resetRequest: AuthAPI.PasswordResetCompleteRequest) throws -> TokenAcquiredResponse {
+	public func completePasswordReset(resetRequest: AuthAPI.PasswordResetCompleteRequest) throws -> TokenAcquiredResponse<S.MetaType> {
 		let loweredAddress = resetRequest.address.lowercased()
 		do {
 			let db = try sauthDB.getDB()

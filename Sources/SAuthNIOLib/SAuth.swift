@@ -44,6 +44,8 @@ public enum URIKey {
 
 public protocol SAuthConfigProvider {
 	associatedtype DBConfig: DatabaseConfigurationProtocol
+	associatedtype MetaType: Codable
+	
 	func getDB() throws -> Database<DBConfig>
 	
 	func getServerPublicKey() throws -> PEMKey
@@ -53,8 +55,8 @@ public protocol SAuthConfigProvider {
 	func getPushConfigurationTopic(forType: String) throws -> String
 	
 	// authToken will be URI-safe
-	func sendEmailPasswordReset(authToken: String, account: Account, alias: AliasBrief) throws
-	func sendEmailValidation(authToken: String, account: Account, alias: AliasBrief) throws
+	func sendEmailPasswordReset(authToken: String, account: Account<MetaType>, alias: AliasBrief) throws
+	func sendEmailValidation(authToken: String, account: Account<MetaType>, alias: AliasBrief) throws
 	
 	func getTemplatePath(_ key: TemplateKey) throws -> String
 	func getURI(_ key: URIKey) throws -> String
@@ -63,6 +65,8 @@ public protocol SAuthConfigProvider {
 public struct SAuth<P: SAuthConfigProvider> {
 	let provider: P
 	public typealias DB = Database<P.DBConfig>
+	public typealias Account = SAuthCodables.Account<P.MetaType>
+	
 	private func getDB() throws -> DB {
 		return try provider.getDB()
 	}
@@ -118,7 +122,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// create account
-	public func createAccount(address: String, password: String, fullName: String?) throws -> (Account, Alias) {
+	public func createAccount(address: String, password: String, meta: P.MetaType?) throws -> (Account, Alias) {
 		let db = try getDB()
 		let loweredAddress = address.lowercased()
 		let now = Date().sauthTimeInterval
@@ -133,7 +137,6 @@ public struct SAuth<P: SAuthConfigProvider> {
 			guard existingCount == 0 else {
 				return nil
 			}
-			let meta = AccountPublicMeta(fullName: fullName)
 			let account = Account(id: id, flags: 0, createdAt: now, meta: meta)
 			try db.table(Account.self).insert(account)
 			let alias = Alias(address: loweredAddress,
@@ -153,7 +156,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 
 	// log in to account
-	public func logIn(address: String, password: String) throws -> TokenAcquiredResponse {
+	public func logIn(address: String, password: String) throws -> TokenAcquiredResponse<P.MetaType> {
 		let loweredAddress = address.lowercased()
 		let db = try getDB()
 		let table = db.table(Alias.self)
@@ -178,7 +181,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// change password. no permissions checking done here
-	public func changePasswordUnchecked(address: String, password: String) throws -> TokenAcquiredResponse {
+	public func changePasswordUnchecked(address: String, password: String) throws -> TokenAcquiredResponse<P.MetaType> {
 		let db = try getDB()
 		let loweredAddress = address.lowercased()
 		let table = db.table(Alias.self)
@@ -239,13 +242,13 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// add alias to account (additional un/pw)
-	public func addAlias(token: String, address: String, password: String) throws -> TokenAcquiredResponse {
+	public func addAlias(token: String, address: String, password: String) throws -> TokenAcquiredResponse<P.MetaType> {
 		let db = try getDB()
 		let existing = try validateToken(token, db: db)
 		return try addAlias(accountId: existing.account, address: address, password: password, db: db)
 	}
 	
-	private func addAlias(accountId: UUID, address: String, password: String, db: DB) throws -> TokenAcquiredResponse {
+	private func addAlias(accountId: UUID, address: String, password: String, db: DB) throws -> TokenAcquiredResponse<P.MetaType> {
 		let loweredAddress = address.lowercased()
 		let table = db.table(Alias.self)
 		let whereMatch = table.where(\Alias.address == loweredAddress)
@@ -302,7 +305,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 
 	// get meta data for account
-	public func getMeta(token: String, for: UUID) throws -> AccountPublicMeta? {
+	public func getMeta(token: String, for: UUID) throws -> P.MetaType? {
 		let db = try getDB()
 		_ = try validateToken(token, db: db)
 		let account = try db.table(Account.self)
@@ -313,7 +316,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// get meta data for account
-	public func getMeta(token: String) throws -> AccountPublicMeta? {
+	public func getMeta(token: String) throws -> P.MetaType? {
 		let db = try getDB()
 		let me = try validateToken(token, db: db)
 		let account = try db.table(Account.self)
@@ -324,7 +327,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// add meta data to account
-	public func setMeta(token: String, meta: AccountPublicMeta) throws {
+	public func setMeta(token: String, meta: P.MetaType) throws {
 		let db = try getDB()
 		let id = try validateToken(token, db: db).account
 		let newAcc = Account(id: id, flags: 0, createdAt: 0, meta: meta)
@@ -337,13 +340,15 @@ public struct SAuth<P: SAuthConfigProvider> {
 	public func createOrLogIn(provider: String,
 							  accessToken: String,
 							  address: String,
-							  meta: AccountPublicMeta) throws -> TokenAcquiredResponse {
+							  meta: P.MetaType?) throws -> TokenAcquiredResponse<P.MetaType> {
 		let loweredAddress = address.lowercased()
 		let db = try getDB()
 		let table = db.table(Alias.self)
 		if try table.where(\Alias.address == loweredAddress).count() == 1 {
-			let response = try logIn(provider: provider, accessToken: accessToken, address: address, db: db)
-			try setMeta(token: response.token, meta: meta)
+			let response: TokenAcquiredResponse<P.MetaType> = try logIn(provider: provider, accessToken: accessToken, address: address, db: db)
+			if let meta = meta {
+				try setMeta(token: response.token, meta: meta)
+			}
 			return response
 		}
 		return try createAccount(provider: provider, accessToken: accessToken, address: address, meta: meta, db: db)
@@ -353,7 +358,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	public func createAccount(provider: String,
 							  accessToken: String,
 							  address: String,
-							  meta: AccountPublicMeta) throws -> TokenAcquiredResponse {
+							  meta: P.MetaType?) throws -> TokenAcquiredResponse<P.MetaType> {
 		let db = try getDB()
 		return try createAccount(provider: provider, accessToken: accessToken, address: address, meta: meta, db: db)
 	}
@@ -361,8 +366,8 @@ public struct SAuth<P: SAuthConfigProvider> {
 	func createAccount(provider: String,
 					  accessToken: String,
 					  address: String,
-					  meta: AccountPublicMeta,
-					  db: DB) throws -> TokenAcquiredResponse {
+					  meta: P.MetaType?,
+					  db: DB) throws -> TokenAcquiredResponse<P.MetaType> {
 		let loweredAddress = address.lowercased()
 		let now = Date().sauthTimeInterval
 		let table = db.table(Alias.self)
@@ -407,7 +412,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	// receive OAuth token and log in to existing account
 	public func logIn(provider: String,
 					  accessToken: String,
-					  address: String) throws -> TokenAcquiredResponse {
+					  address: String) throws -> TokenAcquiredResponse<P.MetaType> {
 		let db = try getDB()
 		return try logIn(provider: provider, accessToken: accessToken, address: address, db: db)
 	}
@@ -415,7 +420,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	func logIn(provider: String,
 			   accessToken: String,
 			   address: String,
-			   db: DB) throws -> TokenAcquiredResponse {
+			   db: DB) throws -> TokenAcquiredResponse<P.MetaType> {
 		let loweredAddress = address.lowercased()
 		let db = try getDB()
 		let table = db.table(Alias.self)
