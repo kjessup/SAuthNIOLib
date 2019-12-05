@@ -23,10 +23,10 @@ public extension Date {
 }
 
 public struct AuthenticatedRequest<Meta: Codable> {
-	let request: HTTPRequest
-	let token: String
-	let account: Account<Meta>
-	let aliasId: String
+	public let request: HTTPRequest
+	public let token: String
+	public let account: Account<Meta>
+	public let aliasId: String
 }
 
 extension AliasBrief {
