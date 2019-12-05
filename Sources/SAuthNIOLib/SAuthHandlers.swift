@@ -40,7 +40,7 @@ extension AliasBrief {
 }
 
 public struct SAuthHandlers<S: SAuthConfigProvider> {
-	let sauthDB: S
+	public let sauthDB: S
 	public init(_ s: S) {
 		sauthDB = s
 	}
