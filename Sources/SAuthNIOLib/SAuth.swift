@@ -63,7 +63,7 @@ public protocol SAuthConfigProvider {
 }
 
 public struct SAuth<P: SAuthConfigProvider> {
-	let provider: P
+	public let provider: P
 	public typealias DB = Database<P.DBConfig>
 	public typealias Account = SAuthCodables.Account<P.MetaType>
 	
