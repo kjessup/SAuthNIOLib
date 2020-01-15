@@ -29,9 +29,9 @@ extension AliasBrief: TableNameProvider {
 }
 
 let tokenExpirationSeconds = 31536000
-let encryptCipher = Cipher.aes_256_cbc
-let jwtAlgo = JWT.Alg.rs256
-let digestAlgo = Digest.sha256
+public let encryptCipher = Cipher.aes_256_cbc
+public let jwtAlgo = JWT.Alg.rs256
+public let digestAlgo = Digest.sha256
 
 public enum TemplateKey {
 	case passwordResetForm, passwordResetOk, passwordResetError, passwordResetEmail
@@ -62,6 +62,51 @@ public protocol SAuthConfigProvider {
 	func getURI(_ key: URIKey) throws -> String
 }
 
+fileprivate struct DBAccount: Codable, TableNameProvider {
+	fileprivate struct Empty: Codable {}
+	static let tableName = "account"
+	let id: UUID
+	let flags: UInt
+	let createdAt: Int
+	let meta: Empty?
+}
+fileprivate struct DBAlias: Codable {
+	static let tableName = "alias"
+	let address: String
+	let account: UUID
+	let priority: Int
+	let flags: UInt
+	let pwSalt: String?
+	let pwHash: String?
+	let defaultLocale: String?
+}
+fileprivate struct DBAccessToken: Codable {
+	static let tableName = "accesstoken"
+	let aliasId: String
+	let provider: String
+	let token: String
+	let expiration: Int?
+}
+fileprivate struct DBMobileDeviceId: Codable {
+	static let tableName = "mobiledeviceid"
+	let deviceId: String
+	let deviceType: String
+	let aliasId: String
+	let createdAt: Int
+}
+fileprivate struct DBPasswordResetToken: Codable {
+	static let tableName = "passwordresettoken"
+	let aliasId: String
+	let authId: String
+	let expiration: Int
+}
+fileprivate struct DBAccountValidationToken: Codable {
+	static let tableName = "accountvalidationtoken"
+	let aliasId: String
+	let authId: String
+	let createdAt: Int
+}
+
 public struct SAuth<P: SAuthConfigProvider> {
 	public let provider: P
 	public typealias DB = Database<P.DBConfig>
@@ -76,12 +121,12 @@ public struct SAuth<P: SAuthConfigProvider> {
 	public func initialize() throws {
 		_ = PerfectCrypto.isInitialized
 		let db = try getDB()
-		try db.create(Account.self, primaryKey: \.id, policy: .reconcileTable)
-		try db.create(Alias.self, policy: .reconcileTable).index(unique: true, \.address)
-		try db.create(AccessToken.self, policy: .reconcileTable).index(unique: true, \.provider, \.token, \.aliasId)
-		try db.create(MobileDeviceId.self, policy: .reconcileTable).index(unique: true, \.deviceId, \.aliasId)
-		try db.create(PasswordResetToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
-		try db.create(AccountValidationToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
+		try db.create(DBAccount.self, primaryKey: \.id, policy: .reconcileTable)
+		try db.create(DBAlias.self, policy: .reconcileTable).index(unique: true, \.address)
+		try db.create(DBAccessToken.self, policy: .reconcileTable).index(unique: true, \.provider, \.token, \.aliasId)
+		try db.create(DBMobileDeviceId.self, policy: .reconcileTable).index(unique: true, \.deviceId, \.aliasId)
+		try db.create(DBPasswordResetToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
+		try db.create(DBAccountValidationToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
 		try db.create(Audit.self, policy: .reconcileTable)
 	}
 	private func pwHash(password: String) -> (hexSalt: String, hexHash: String)? {
@@ -107,7 +152,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		return compareHexHash == hexHash		
 	}
-	private func newClaim(_ address: String,
+	public func newClaim(_ address: String,
 						  accoundId: UUID?,
 						  oauthProvider: String? = nil,
 						  oauthAccessToken: String? = nil) -> TokenClaim {
