@@ -70,7 +70,7 @@ fileprivate struct DBAccount: Codable, TableNameProvider {
 	let createdAt: Int
 	let meta: Empty?
 }
-fileprivate struct DBAlias: Codable {
+fileprivate struct DBAlias: Codable, TableNameProvider {
 	static let tableName = "alias"
 	let address: String
 	let account: UUID
@@ -80,27 +80,27 @@ fileprivate struct DBAlias: Codable {
 	let pwHash: String?
 	let defaultLocale: String?
 }
-fileprivate struct DBAccessToken: Codable {
+fileprivate struct DBAccessToken: Codable, TableNameProvider {
 	static let tableName = "accesstoken"
 	let aliasId: String
 	let provider: String
 	let token: String
 	let expiration: Int?
 }
-fileprivate struct DBMobileDeviceId: Codable {
+fileprivate struct DBMobileDeviceId: Codable, TableNameProvider {
 	static let tableName = "mobiledeviceid"
 	let deviceId: String
 	let deviceType: String
 	let aliasId: String
 	let createdAt: Int
 }
-fileprivate struct DBPasswordResetToken: Codable {
+fileprivate struct DBPasswordResetToken: Codable, TableNameProvider {
 	static let tableName = "passwordresettoken"
 	let aliasId: String
 	let authId: String
 	let expiration: Int
 }
-fileprivate struct DBAccountValidationToken: Codable {
+fileprivate struct DBAccountValidationToken: Codable, TableNameProvider {
 	static let tableName = "accountvalidationtoken"
 	let aliasId: String
 	let authId: String
