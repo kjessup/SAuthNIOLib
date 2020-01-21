@@ -1,4 +1,4 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.1
 import PackageDescription
 
 let package = Package(
@@ -8,7 +8,7 @@ let package = Package(
 	],
 	dependencies: [
 		.package(url: "https://github.com/kjessup/SAuthCodables.git", .branch("master")),
-		.package(url: "https://github.com/PerfectlySoft/Perfect-CRUD.git", from: "1.0.0"),
+		.package(url: "https://github.com/PerfectlySoft/Perfect-CRUD.git", .branch("swift-5.1")),
 		.package(url: "https://github.com/PerfectlySoft/Perfect-NIO.git", .branch("master")),
 		.package(url: "https://github.com/PerfectlySoft/Perfect-Notifications.git", from: "4.0.0"),
 		.package(url: "https://github.com/PerfectlySoft/Perfect-CURL.git", from: "4.0.0"),
