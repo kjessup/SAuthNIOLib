@@ -65,7 +65,7 @@ public protocol SAuthConfigProvider {
 fileprivate struct DBAccount: Codable, TableNameProvider {
 	fileprivate struct Empty: Codable {}
 	static let tableName = "account"
-	let id: UUID
+	@PrimaryKey var id: UUID
 	let flags: UInt
 	let createdAt: Int
 	let meta: Empty?
@@ -73,7 +73,7 @@ fileprivate struct DBAccount: Codable, TableNameProvider {
 fileprivate struct DBAlias: Codable, TableNameProvider {
 	static let tableName = "alias"
 	let address: String
-	let account: UUID
+	@ForeignKey(DBAccount.self, onDelete: cascade, onUpdate: cascade) var account: UUID
 	let priority: Int
 	let flags: UInt
 	let pwSalt: String?
@@ -96,13 +96,13 @@ fileprivate struct DBMobileDeviceId: Codable, TableNameProvider {
 }
 fileprivate struct DBPasswordResetToken: Codable, TableNameProvider {
 	static let tableName = "passwordresettoken"
-	let aliasId: String
+	@PrimaryKey var aliasId: String
 	let authId: String
 	let expiration: Int
 }
 fileprivate struct DBAccountValidationToken: Codable, TableNameProvider {
 	static let tableName = "accountvalidationtoken"
-	let aliasId: String
+	@PrimaryKey var aliasId: String
 	let authId: String
 	let createdAt: Int
 }
@@ -121,12 +121,12 @@ public struct SAuth<P: SAuthConfigProvider> {
 	public func initialize() throws {
 		_ = PerfectCrypto.isInitialized
 		let db = try getDB()
-		try db.create(DBAccount.self, primaryKey: \.id, policy: .reconcileTable)
+		try db.create(DBAccount.self, policy: .reconcileTable)
 		try db.create(DBAlias.self, policy: .reconcileTable).index(unique: true, \.address)
 		try db.create(DBAccessToken.self, policy: .reconcileTable).index(unique: true, \.provider, \.token, \.aliasId)
 		try db.create(DBMobileDeviceId.self, policy: .reconcileTable).index(unique: true, \.deviceId, \.aliasId)
-		try db.create(DBPasswordResetToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
-		try db.create(DBAccountValidationToken.self, primaryKey: \.aliasId, policy: .reconcileTable)
+		try db.create(DBPasswordResetToken.self, policy: .reconcileTable)
+		try db.create(DBAccountValidationToken.self, policy: .reconcileTable)
 		try db.create(Audit.self, policy: .reconcileTable)
 	}
 	private func pwHash(password: String) -> (hexSalt: String, hexHash: String)? {
