@@ -95,10 +95,11 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 		do {
 			if let jwtVer = JWTVerifier(token) {
 				try jwtVer.verify(algo: .rs256, key: sauthDB.getServerPublicKey())
-				let payload = try jwtVer.decode(as: TokenClaim.self)
+				let payload = jwtVer.payload
 				let table = try sauthDB.getDB().table(Account<S.MetaType>.self)
-				if let accountId = payload.accountId,
-					let alias = payload.subject,
+				if let accountIdStr = payload["accountId"] as? String,
+					let accountId = UUID(uuidString: accountIdStr),
+					let alias = payload["sub"]as? String,
 					let account = try table.where(\Account<S.MetaType>.id == accountId).first() {
 					return AuthenticatedRequest(request: request,
 												token: token,

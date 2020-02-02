@@ -60,6 +60,8 @@ public protocol SAuthConfigProvider {
 	
 	func getTemplatePath(_ key: TemplateKey) throws -> String
 	func getURI(_ key: URIKey) throws -> String
+	
+	func makeClaim(_ address: String, accoundId: UUID?) -> TokenClaim
 }
 
 fileprivate struct DBAccount: Codable, TableNameProvider {
@@ -157,13 +159,19 @@ public struct SAuth<P: SAuthConfigProvider> {
 						  oauthProvider: String? = nil,
 						  oauthAccessToken: String? = nil) -> TokenClaim {
 		let now = Date().sauthTimeInterval
+		var ex: [String:Codable] = [:]
+		if let oauthProvider = oauthProvider {
+			ex["oauthProvider"] = oauthProvider
+		}
+		if let oauthAccessToken = oauthAccessToken {
+			ex["oauthAccessToken"] = oauthAccessToken
+		}
 		return TokenClaim(issuer: "sauth",
 						   subject: address,
 						   expiration: now + tokenExpirationSeconds,
 						   issuedAt: now,
 						   accountId: accoundId,
-						   oauthProvider: oauthProvider,
-						   oauthAccessToken: oauthAccessToken)
+						   extra: ex)
 	}
 	
 	// create account
@@ -219,8 +227,10 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id)
-		let token = try JWTCreator(payload: claim).sign(alg: jwtAlgo, key: privateKey)
+		let claim = provider.makeClaim(loweredAddress, accoundId: account?.id).payload
+		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
+			try badAudit(db: db, alias: loweredAddress, action: "login", error: "Invalid claim was generated.")
+		}
 		goodAudit(db: db, alias: loweredAddress, action: "login", account: account?.id)
 		return TokenAcquiredResponse(token: token, account: account)
 	}
@@ -252,8 +262,10 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id)
-		let token = try JWTCreator(payload: claim).sign(alg: jwtAlgo, key: privateKey)
+		let claim = newClaim(loweredAddress, accoundId: account?.id).payload
+		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
+			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
+		}
 		goodAudit(db: db, alias: loweredAddress, action: "change password", account: account?.id)
 		return TokenAcquiredResponse(token: token, account: account)
 	}
@@ -263,7 +275,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		guard let valid = JWTVerifier(token) else {
 			throw SAuthError(description: "Bad token.")
 		}
-		let claim = try valid.decode(as: TokenClaim.self)
+		let claim = TokenClaim(fields: valid.payload)
 		guard let id = claim.subject,
 			let exp = claim.expiration else {
 				throw SAuthError(description: "Bad token. No subject or expiration.")
@@ -320,8 +332,10 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == accountId).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id)
-		let token = try JWTCreator(payload: claim).sign(alg: jwtAlgo, key: privateKey)
+		let claim = newClaim(loweredAddress, accoundId: account?.id).payload
+		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
+			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
+		}
 		goodAudit(db: db, alias: loweredAddress, action: "add alias", account: account?.id)
 		return TokenAcquiredResponse(token: token, account: account)
 	}
@@ -448,8 +462,13 @@ public struct SAuth<P: SAuthConfigProvider> {
 			try tokensTable.insert(token)
 		}
 		let privateKey = try self.provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id, oauthProvider: provider, oauthAccessToken: accessToken)
-		let token = try JWTCreator(payload: claim).sign(alg: jwtAlgo, key: privateKey)
+		let claim = newClaim(loweredAddress,
+							 accoundId: account?.id,
+							 oauthProvider: provider,
+							 oauthAccessToken: accessToken).payload
+		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
+			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
+		}
 		goodAudit(db: db, alias: loweredAddress, action: "create account", account: account?.id, provider: provider)
 		return TokenAcquiredResponse(token: token, account: account)
 	}
@@ -493,8 +512,13 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try self.provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id, oauthProvider: provider, oauthAccessToken: accessToken)
-		let token = try JWTCreator(payload: claim).sign(alg: jwtAlgo, key: privateKey)
+		let claim = newClaim(loweredAddress,
+							 accoundId: account?.id,
+							 oauthProvider: provider,
+			oauthAccessToken: accessToken).payload
+		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
+			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
+		}
 		goodAudit(db: db, alias: loweredAddress, action: "login", account: account?.id)
 		return TokenAcquiredResponse(token: token, account: account)
 	}
