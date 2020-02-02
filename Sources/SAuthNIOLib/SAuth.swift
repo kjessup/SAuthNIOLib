@@ -61,7 +61,7 @@ public protocol SAuthConfigProvider {
 	func getTemplatePath(_ key: TemplateKey) throws -> String
 	func getURI(_ key: URIKey) throws -> String
 	
-	func makeClaim(_ address: String, accoundId: UUID?) -> TokenClaim
+	func makeClaim(_ address: String, accountId: UUID?) -> TokenClaim
 }
 
 fileprivate struct DBAccount: Codable, TableNameProvider {
@@ -155,7 +155,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		return compareHexHash == hexHash		
 	}
 	public func newClaim(_ address: String,
-						  accoundId: UUID?,
+						  accountId: UUID?,
 						  oauthProvider: String? = nil,
 						  oauthAccessToken: String? = nil) -> TokenClaim {
 		let now = Date().sauthTimeInterval
@@ -170,7 +170,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 						   subject: address,
 						   expiration: now + tokenExpirationSeconds,
 						   issuedAt: now,
-						   accountId: accoundId,
+						   accountId: accountId,
 						   extra: ex)
 	}
 	
@@ -227,7 +227,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = provider.makeClaim(loweredAddress, accoundId: account?.id).payload
+		let claim = provider.makeClaim(loweredAddress, accountId: account?.id).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
 			try badAudit(db: db, alias: loweredAddress, action: "login", error: "Invalid claim was generated.")
 		}
@@ -262,7 +262,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id).payload
+		let claim = newClaim(loweredAddress, accountId: account?.id).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
 			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
 		}
@@ -332,7 +332,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let account = try db.table(Account.self).where(\Account.id == accountId).first()
 		let privateKey = try provider.getServerPrivateKey()
-		let claim = newClaim(loweredAddress, accoundId: account?.id).payload
+		let claim = newClaim(loweredAddress, accountId: account?.id).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
 			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
 		}
@@ -463,7 +463,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let privateKey = try self.provider.getServerPrivateKey()
 		let claim = newClaim(loweredAddress,
-							 accoundId: account?.id,
+							 accountId: account?.id,
 							 oauthProvider: provider,
 							 oauthAccessToken: accessToken).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
@@ -513,7 +513,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		let account = try db.table(Account.self).where(\Account.id == alias.account).first()
 		let privateKey = try self.provider.getServerPrivateKey()
 		let claim = newClaim(loweredAddress,
-							 accoundId: account?.id,
+							 accountId: account?.id,
 							 oauthProvider: provider,
 			oauthAccessToken: accessToken).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
