@@ -47,6 +47,7 @@ public struct SAuthHandlers<S: SAuthConfigProvider> {
 	public func register(request: AuthAPI.RegisterRequest<S.MetaType>) throws -> AliasBrief {
 		let (account, alias) = try SAuth(sauthDB).createAccount(address: request.email,
 																password: request.password,
+																profilePic: request.profilePic,
 																meta: request.meta)
 		let token = try addAliasValidationToken(address: alias.address, db: try sauthDB.getDB())
 		let aliasBrief = AliasBrief(alias)

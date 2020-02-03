@@ -70,6 +70,7 @@ fileprivate struct DBAccount: Codable, TableNameProvider {
 	@PrimaryKey var id: UUID
 	let flags: UInt
 	let createdAt: Int
+	let profilePic: String?
 	let meta: Empty?
 }
 fileprivate struct DBAlias: Codable, TableNameProvider {
@@ -175,7 +176,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 	}
 	
 	// create account
-	public func createAccount(address: String, password: String, meta: P.MetaType?) throws -> (Account, Alias) {
+	public func createAccount(address: String, password: String, profilePic: String?, meta: P.MetaType?) throws -> (Account, Alias) {
 		let db = try getDB()
 		let loweredAddress = address.lowercased()
 		let now = Date().sauthTimeInterval
@@ -190,7 +191,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 			guard existingCount == 0 else {
 				return nil
 			}
-			let account = Account(id: id, flags: 0, createdAt: now, meta: meta)
+			let account = Account(id: id, flags: 0, createdAt: now, profilePic: profilePic, meta: meta)
 			try db.table(Account.self).insert(account)
 			let alias = Alias(address: loweredAddress,
 							  account: id,
