@@ -10,7 +10,9 @@ import PerfectNIO
 import PerfectCrypto
 import PerfectCRUD
 import PerfectNotifications
+import PerfectLib
 import SAuthCodables
+import struct Foundation.UUID
 
 public let authCookieName = "sauth_token" // !FIX!
 
@@ -317,5 +319,82 @@ extension SAuthHandlers {
 			}
 		}
 		return try SAuth(sauthDB).changePasswordUnchecked(address: loweredAddress, password: resetRequest.password)
+	}
+}
+
+public extension SAuthHandlers {
+	func updateProfilePic(auth: AuthenticatedRequest<S.MetaType>, request: UpdateProfilePicRequest) throws -> UpdateProfilePicResponse {
+		let sauth = SAuth(sauthDB)
+		let db = try sauth.provider.getDB()
+		guard auth.account.isAdmin || auth.account.id == request.accountId else {
+			try sauth.badAudit(db: db, alias: "*", action: "update profile pic", account: request.accountId,
+							   provider: nil, error: "Unauthorized request from \(auth.account.id.uuidString).")
+		}
+		let profilePicPath: String?
+		let profilePic = request.profilePic
+		let destFSPath = try sauth.provider.getURI(.profilePicsFSPath)
+		let destWebPath = try sauth.provider.getURI(.profilePicsWebPath)
+		
+		let srcFile = File(profilePic.tmpFileName)
+		let fileId = UUID()
+		var fileName = fileId.uuidString
+		let ext = profilePic.fileName.filePathExtension
+		if !ext.isEmpty {
+			fileName += ".\(ext)"
+		}
+		_ = try srcFile.moveTo(path: "\(destFSPath)/\(fileName)")
+		profilePicPath = "\(destWebPath)/\(fileName)"
+		
+		let newAcc = Account<S.MetaType>(id: request.accountId, flags: 0, createdAt: 0, profilePic: profilePicPath, meta: nil)
+		try db.table(Account<S.MetaType>.self)
+			.where(\Account<S.MetaType>.id == request.accountId)
+			.update(newAcc, setKeys: \.profilePic)
+		sauth.goodAudit(db: db, alias: "*", action: "update profile pic", account: request.accountId)
+		return UpdateProfilePicResponse(profilePicURI: profilePicPath)
+	}
+	
+	func deleteAccount(request: DeleteAccountRequest) throws -> EmptyReply {
+		let sauth = SAuth(sauthDB)
+		let db = try sauth.provider.getDB()
+		let accountQ = db.table(Account<S.MetaType>.self).limit(1).where(\Account<S.MetaType>.id == request.accountId)
+		if let account = try accountQ.first(),
+			let picName = account.profilePic?.lastFilePathComponent {
+			let picsPath = try sauth.provider.getURI(.profilePicsFSPath)
+			File("\(picsPath)/\(picName)").delete()
+		}
+		try accountQ.delete()
+		return EmptyReply()
+	}
+	func listAccounts(request: AuthenticatedRequest<S.MetaType>) throws -> [AliasBrief] {
+		guard request.account.isAdmin else {
+			return []
+		}
+		let sauth = SAuth(sauthDB)
+		let db = try sauth.provider.getDB()
+		return try db.table(AliasBrief.self).select().map{$0}
+	}
+	func registerUser(request: AccountRegisterRequest) throws -> AuthAPI.RegisterRequest<S.MetaType> {
+		let sauth = SAuth(sauthDB)
+		let meta = sauth.provider.metaFrom(request: request)
+		let profilePicPath: String?
+		let destFSPath = try sauth.provider.getURI(.profilePicsFSPath)
+		let destWebPath = try sauth.provider.getURI(.profilePicsWebPath)
+		if let profilePic = request.profilePic {
+			let srcFile = File(profilePic.tmpFileName)
+			let fileId = UUID()
+			var fileName = fileId.uuidString
+			let ext = profilePic.fileName.filePathExtension
+			if !ext.isEmpty {
+				fileName += ".\(ext)"
+			}
+			_ = try srcFile.moveTo(path: "\(destFSPath)/\(fileName)")
+			profilePicPath = "\(destWebPath)/\(fileName)"
+		} else {
+			profilePicPath = nil
+		}
+		return AuthAPI.RegisterRequest(email: request.email,
+										password: request.password,
+										profilePic: profilePicPath,
+										meta: meta)
 	}
 }

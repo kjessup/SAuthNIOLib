@@ -10,6 +10,8 @@ import PerfectCRUD
 import PerfectCrypto
 import SAuthCodables
 
+public let sauthAdminFlag = UInt(0x8000)
+
 public enum AliasFlags: UInt {
 	case provisional = 0x01
 	case inprogress = 0x02
@@ -19,6 +21,10 @@ extension Alias {
 	var provisional: Bool {
 		return 0 != (flags & AliasFlags.provisional.rawValue)
 	}
+}
+
+public extension Account {
+	var isAdmin: Bool { return 0 != (flags & sauthAdminFlag) }
 }
 
 extension AliasBrief: TableNameProvider {
@@ -39,7 +45,8 @@ public enum TemplateKey {
 }
 
 public enum URIKey {
-	case oauthRedirect, passwordReset, accountValidate
+	case oauthRedirect, passwordReset, accountValidate,
+		profilePicsFSPath, profilePicsWebPath
 }
 
 public protocol SAuthConfigProvider {
@@ -62,6 +69,8 @@ public protocol SAuthConfigProvider {
 	func getURI(_ key: URIKey) throws -> String
 	
 	func makeClaim(_ address: String, accountId: UUID?) -> TokenClaim
+	
+	func metaFrom(request: AccountRegisterRequest) -> MetaType?
 }
 
 fileprivate struct DBAccount: Codable, TableNameProvider {
