@@ -277,13 +277,11 @@ extension SAuthHandlers {
 						return
 					}
 					if case .ok = f.status {
-						// !FIX! wait N minutes and if the token is still there send an email?
-						return
+//						return
 					} else {
-						_ = try? self.sendEmailPasswordReset(address: loweredAddress, authId: authId, alias: alias, db: db)
+//						_ = try? self.sendEmailPasswordReset(address: loweredAddress, authId: authId, alias: alias, db: db)
 					}
 			}
-			return EmptyReply()
 		}
 		return try sendEmailPasswordReset(address: loweredAddress, authId: authId, alias: alias, db: db)
 	}
