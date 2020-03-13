@@ -13,11 +13,16 @@ public enum OAuthProvider: String {
 	case google = "google"
 	case facebook = "facebook"
 	case linkedin = "linkedin"
+	case apple = "apple"
 }
 
 public struct OAuthProviderAndToken: Codable {
-	let provider: String
-	let token: String
+	public let provider: String
+	public let token: String
+	public init(provider: String, token: String) {
+		self.provider = provider
+		self.token = token
+	}
 }
 
 public struct OAuthHandlers<S: SAuthConfigProvider> {
@@ -41,6 +46,9 @@ public struct OAuthHandlers<S: SAuthConfigProvider> {
 			throw ErrorOutput(status: .badRequest, description: "Bad provider.")
 		}
 		switch provider {
+		case .apple:
+			()
+			throw ErrorOutput(status: .badRequest, description: "Bad provider.")
 		case .google:
 			guard let gInfo = getGooglePlusData(provTok.token),
 				let address = gInfo.email else {
