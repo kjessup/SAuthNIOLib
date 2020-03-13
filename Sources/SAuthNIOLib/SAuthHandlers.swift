@@ -396,3 +396,15 @@ public extension SAuthHandlers {
 										meta: meta)
 	}
 }
+
+public extension SAuthHandlers {
+	func initSAuth(request: AccountRegisterRequest) throws -> AliasBrief {
+		let sauth = SAuth(sauthDB)
+		let db = try sauth.provider.getDB()
+		guard try db.table(Account<S.MetaType>.self).count() == 0 else {
+			throw ErrorOutput(status: .notFound)
+		}
+		let newReq = AccountRegisterRequest(email: request.email, password: request.password, isAdmin: true)
+		return try register(request: try registerUser(request: newReq))
+	}
+}

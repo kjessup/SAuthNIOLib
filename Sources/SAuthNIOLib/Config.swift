@@ -64,6 +64,7 @@ public struct Config: Codable {
 		public let accountValidationEmail: String?
 		public let accountValidationError: String?
 		public let accountValidationOk: String?
+		public let sauthInitForm: String?
 	}
 	public struct Redis: Codable {
 		public let host: String

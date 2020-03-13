@@ -9,6 +9,12 @@ import Foundation
 
 public struct EnvDecoderError: Error, CustomStringConvertible {
 	public let description: String
+	init(description: String) {
+		self.description = description
+	}
+	init(missingKey key: String) {
+		self.description = "Missing required config key \(key)"
+	}
 }
 
 struct EnvKey: CodingKey{
@@ -63,6 +69,13 @@ fileprivate func value(forKey: String) -> String? {
 	return value
 }
 
+fileprivate func tvalue(forKey: String) throws -> String {
+	guard let value = value(forKey: forKey) else {
+		throw EnvDecoderError(missingKey: forKey)
+	}
+	return value
+}
+
 class ObjectReader<K : CodingKey>: KeyedDecodingContainerProtocol {
 	typealias Key = K
 	var allKeys: [K] = EnvVarDecoder.envKeys.compactMap { Key(stringValue: $0) }
@@ -81,59 +94,59 @@ class ObjectReader<K : CodingKey>: KeyedDecodingContainerProtocol {
 	}
 	
 	func decode(_ type: Bool.Type, forKey key: K) throws -> Bool {
-		return Bool(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "false") ?? false
+		return Bool(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? false
 	}
 	
 	func decode(_ type: String.Type, forKey key: K) throws -> String {
-		return value(forKey: joinKeys(codingPath: codingPath + [key])) ?? ""
+		return try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) 
 	}
 	
 	func decode(_ type: Double.Type, forKey key: K) throws -> Double {
-		return Double(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Double(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Float.Type, forKey key: K) throws -> Float {
-		return Float(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Float(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Int.Type, forKey key: K) throws -> Int {
-		return Int(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Int(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Int8.Type, forKey key: K) throws -> Int8 {
-		return Int8(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Int8(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Int16.Type, forKey key: K) throws -> Int16 {
-		return Int16(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Int16(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Int32.Type, forKey key: K) throws -> Int32 {
-		return Int32(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Int32(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: Int64.Type, forKey key: K) throws -> Int64 {
-		return Int64(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return Int64(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: UInt.Type, forKey key: K) throws -> UInt {
-		return UInt(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return UInt(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: UInt8.Type, forKey key: K) throws -> UInt8 {
-		return UInt8(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return UInt8(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: UInt16.Type, forKey key: K) throws -> UInt16 {
-		return UInt16(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return UInt16(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: UInt32.Type, forKey key: K) throws -> UInt32 {
-		return UInt32(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return UInt32(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode(_ type: UInt64.Type, forKey key: K) throws -> UInt64 {
-		return UInt64(value(forKey: joinKeys(codingPath: codingPath + [key])) ?? "0") ?? 0
+		return UInt64(try tvalue(forKey: joinKeys(codingPath: codingPath + [key])) ) ?? 0
 	}
 	
 	func decode<T>(_ type: T.Type, forKey key: K) throws -> T where T : Decodable {
@@ -196,8 +209,8 @@ class ObjectArrayReader: UnkeyedDecodingContainer {
 		return grp
 	}
 	
-	func sgrpval() -> String? {
-		return value(forKey: grp().1[0])
+	func sgrpval() throws -> String {
+		return try tvalue(forKey: grp().1[0])
 	}
 	
 	func decodeNil() throws -> Bool {
@@ -205,59 +218,59 @@ class ObjectArrayReader: UnkeyedDecodingContainer {
 	}
 	
 	func decode(_ type: Bool.Type) throws -> Bool {
-		return Bool(sgrpval() ?? "false") ?? false
+		return Bool(try sgrpval() ) ?? false
 	}
 	
 	func decode(_ type: String.Type) throws -> String {
-		return String(sgrpval() ?? "")
+		return String(try sgrpval() )
 	}
 	
 	func decode(_ type: Double.Type) throws -> Double {
-		return Double(sgrpval() ?? "0") ?? 0
+		return Double(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Float.Type) throws -> Float {
-		return Float(sgrpval() ?? "0") ?? 0
+		return Float(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Int.Type) throws -> Int {
-		return Int(sgrpval() ?? "0") ?? 0
+		return Int(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Int8.Type) throws -> Int8 {
-		return Int8(sgrpval() ?? "0") ?? 0
+		return Int8(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Int16.Type) throws -> Int16 {
-		return Int16(sgrpval() ?? "0") ?? 0
+		return Int16(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Int32.Type) throws -> Int32 {
-		return Int32(sgrpval() ?? "0") ?? 0
+		return Int32(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: Int64.Type) throws -> Int64 {
-		return Int64(sgrpval() ?? "0") ?? 0
+		return Int64(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: UInt.Type) throws -> UInt {
-		return UInt(sgrpval() ?? "0") ?? 0
+		return UInt(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: UInt8.Type) throws -> UInt8 {
-		return UInt8(sgrpval() ?? "0") ?? 0
+		return UInt8(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: UInt16.Type) throws -> UInt16 {
-		return UInt16(sgrpval() ?? "0") ?? 0
+		return UInt16(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: UInt32.Type) throws -> UInt32 {
-		return UInt32(sgrpval() ?? "0") ?? 0
+		return UInt32(try sgrpval() ) ?? 0
 	}
 	
 	func decode(_ type: UInt64.Type) throws -> UInt64 {
-		return UInt64(sgrpval() ?? "0") ?? 0
+		return UInt64(try sgrpval() ) ?? 0
 	}
 	
 	func decode<T>(_ type: T.Type) throws -> T where T : Decodable {

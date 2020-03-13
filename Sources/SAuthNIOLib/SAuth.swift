@@ -41,7 +41,7 @@ public let digestAlgo = Digest.sha256
 
 public enum TemplateKey {
 	case passwordResetForm, passwordResetOk, passwordResetError, passwordResetEmail
-	case accountValidationEmail, accountValidationError, accountValidationOk
+	case accountValidationEmail, accountValidationError, accountValidationOk, sauthInitForm
 }
 
 public enum URIKey {
