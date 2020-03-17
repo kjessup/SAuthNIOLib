@@ -400,8 +400,11 @@ public extension SAuthHandlers {
 			let table = db.table(Account<S.MetaType>.self)
 			try db.transaction {
 				if let ac = try table.where(\Account<S.MetaType>.id == ab.account).first() {
-					let nw = Account<S.MetaType>(id: ab.account, flags: ac.flags & sauthAdminFlag, createdAt: 0)
-					try table.where(\Account<S.MetaType>.id == ab.account).update(nw, setKeys: \.flags)
+					let newFlags = ac.flags & sauthAdminFlag
+					let id = ac.id
+					print("NEW ADMIN FLAGS \(newFlags) \(id)")
+					let nw = Account<S.MetaType>(id: id, flags: newFlags, createdAt: 0)
+					try table.where(\Account<S.MetaType>.id == id).update(nw, setKeys: \.flags)
 				}
 			}
 		}
