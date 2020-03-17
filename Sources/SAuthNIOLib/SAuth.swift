@@ -68,6 +68,8 @@ public protocol SAuthConfigProvider {
 	func getTemplatePath(_ key: TemplateKey) throws -> String
 	func getURI(_ key: URIKey) throws -> String
 	
+	func created(account: Account<MetaType>, alias: AliasBrief)
+	
 	func makeClaim(_ address: String, accountId: UUID?) -> TokenClaim
 	
 	func metaFrom(request: AccountRegisterRequest) -> MetaType?
@@ -215,6 +217,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		guard let r = ret else {
 			try badAudit(db: db, alias: loweredAddress, action: "create account", error: "Alias already exists.")
 		}
+		provider.created(account: r.0, alias: AliasBrief(address: r.1.address, account: r.1.account, priority: r.1.priority, flags: r.1.flags, defaultLocale: r.1.defaultLocale))
 		return r
 	}
 
@@ -441,28 +444,25 @@ public struct SAuth<P: SAuthConfigProvider> {
 		let now = Date().sauthTimeInterval
 		let table = db.table(Alias.self)
 		let id = UUID()
-		var account: Account?
-		var doBadAudit = false
-		try db.transaction {
-			let existingCount = try table.where(\Alias.address == loweredAddress).count()
-			guard existingCount == 0 else {
-				doBadAudit = true
-				return
+		let d: (account: Account, alias: Alias) =
+			try db.transaction {
+				let existingCount = try table.where(\Alias.address == loweredAddress).count()
+				guard existingCount == 0 else {
+					try badAudit(db: db, alias: loweredAddress, action: "create account", provider: provider, error: "Alias already exists.")
+				}
+				let acc = Account(id: id, flags: 0, createdAt: now, meta: meta)
+				try db.table(Account.self).insert(acc)
+				let ali = Alias(address: loweredAddress,
+								  account: id,
+								  priority: 1,
+								  flags: 0,
+								  pwSalt: nil, pwHash: nil,
+								  defaultLocale: nil)
+				try table.insert(ali)
+				return (acc, ali)
 			}
-			let acc = Account(id: id, flags: 0, createdAt: now, meta: meta)
-			account = acc
-			try db.table(Account.self).insert(acc)
-			let alias = Alias(address: loweredAddress,
-							  account: id,
-							  priority: 1,
-							  flags: 0,
-							  pwSalt: nil, pwHash: nil,
-							  defaultLocale: nil)
-			try table.insert(alias)
-		}
-		if doBadAudit {
-			try badAudit(db: db, alias: loweredAddress, action: "create account", provider: provider, error: "Alias already exists.")
-		}
+		let account = d.account
+		let alias = d.alias
 		let tokensTable = db.table(AccessToken.self)
 		try db.transaction {
 			let token = AccessToken(aliasId: loweredAddress,
@@ -473,13 +473,14 @@ public struct SAuth<P: SAuthConfigProvider> {
 		}
 		let privateKey = try self.provider.getServerPrivateKey()
 		let claim = newClaim(loweredAddress,
-							 accountId: account?.id,
+							 accountId: account.id,
 							 oauthProvider: provider,
 							 oauthAccessToken: accessToken).payload
 		guard let token = try JWTCreator(payload: claim)?.sign(alg: jwtAlgo, key: privateKey) else {
 			try badAudit(db: db, alias: loweredAddress, action: "change password", error: "Invalid claim was generated.")
 		}
-		goodAudit(db: db, alias: loweredAddress, action: "create account", account: account?.id, provider: provider)
+		goodAudit(db: db, alias: loweredAddress, action: "create account", account: account.id, provider: provider)
+		self.provider.created(account: account, alias: AliasBrief(address: alias.address, account: alias.account, priority: alias.priority, flags: alias.flags, defaultLocale: alias.defaultLocale))
 		return TokenAcquiredResponse(token: token, account: account)
 	}
 	
