@@ -371,7 +371,7 @@ public extension SAuthHandlers {
 		let db = try sauth.provider.getDB()
 		return try db.table(AliasBrief.self).select().map{$0}
 	}
-	func registerUser(request: AccountRegisterRequest) throws -> AuthAPI.RegisterRequest<S.MetaType> {
+	func registerUser(request: AccountRegisterRequest) throws -> AliasBrief {
 		let sauth = SAuth(sauthDB)
 		let meta = sauth.provider.metaFrom(request: request)
 		let profilePicPath: String?
@@ -390,10 +390,22 @@ public extension SAuthHandlers {
 		} else {
 			profilePicPath = nil
 		}
-		return AuthAPI.RegisterRequest(email: request.email,
-										password: request.password,
-										profilePic: profilePicPath,
-										meta: meta)
+		let req = AuthAPI.RegisterRequest(email: request.email,
+											password: request.password,
+											profilePic: profilePicPath,
+											meta: meta)
+		let ab = try register(request: req)
+		if request.isAdmin ?? false {
+			let db = try sauth.provider.getDB()
+			let table = db.table(Account<S.MetaType>.self)
+			try db.transaction {
+				if let ac = try table.where(\Account<S.MetaType>.id == ab.account).first() {
+					let nw = Account<S.MetaType>(id: ab.account, flags: ac.flags & sauthAdminFlag, createdAt: 0)
+					try table.where(\Account<S.MetaType>.id == ab.account).update(nw, setKeys: \.flags)
+				}
+			}
+		}
+		return ab
 	}
 }
 
@@ -405,6 +417,6 @@ public extension SAuthHandlers {
 			throw ErrorOutput(status: .notFound)
 		}
 		let newReq = AccountRegisterRequest(email: request.email, password: request.password, isAdmin: true)
-		return try register(request: try registerUser(request: newReq))
+		return try registerUser(request: newReq)
 	}
 }
