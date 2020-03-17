@@ -78,7 +78,7 @@ fileprivate func tvalue(forKey: String) throws -> String {
 
 class ObjectReader<K : CodingKey>: KeyedDecodingContainerProtocol {
 	typealias Key = K
-	var allKeys: [K] = EnvVarDecoder.envKeys.compactMap { Key(stringValue: $0) }
+	let allKeys: [K] = []
 	let codingPath: [CodingKey]
 	init(codingPath: [CodingKey]) {
 		self.codingPath = codingPath
@@ -86,7 +86,12 @@ class ObjectReader<K : CodingKey>: KeyedDecodingContainerProtocol {
 	}
 	
 	func contains(_ key: K) -> Bool {
-		return nil != value(forKey: joinKeys(codingPath: codingPath + [key]))
+		var path = joinKeys(codingPath: codingPath + [key])
+		if nil != value(forKey: path) {
+			return true
+		}
+		path += "_"
+		return nil != EnvVarDecoder.env.keys.first(where: { $0.hasPrefix(path) })
 	}
 	
 	func decodeNil(forKey key: K) throws -> Bool {
