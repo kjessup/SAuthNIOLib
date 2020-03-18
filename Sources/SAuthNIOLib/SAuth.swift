@@ -502,7 +502,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		guard let alias = try table.where(\Alias.address == loweredAddress).first() else {
 			try badAudit(db: db, alias: loweredAddress, action: "login", error: "Bad account alias.")
 		}
-		guard !alias.provisional || (Config.globalConfig.enable?.unvalidatedAccountSignIn ?? false) else {
+		guard Config.globalConfig.enable?.unvalidatedAccountSignIn ?? !alias.provisional else {
 			try badAudit(db: db, alias: loweredAddress, action: "login", error: "This alias has not been validated.")
 		}
 		let tokensTable = db.table(AccessToken.self)
