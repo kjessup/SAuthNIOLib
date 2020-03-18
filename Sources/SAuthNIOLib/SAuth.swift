@@ -229,7 +229,7 @@ public struct SAuth<P: SAuthConfigProvider> {
 		guard let alias = try table.where(\Alias.address == loweredAddress).first() else {
 			try badAudit(db: db, alias: loweredAddress, action: "login", error: "Bad alias.")
 		}
-		guard !alias.provisional else {
+		guard Config.globalConfig.enable?.unvalidatedAccountSignIn ?? !alias.provisional else {
 			try badAudit(db: db, alias: loweredAddress, action: "login", error: "This alias has not been validated.")
 		}
 		guard let hash = alias.pwHash, let salt = alias.pwSalt else {
