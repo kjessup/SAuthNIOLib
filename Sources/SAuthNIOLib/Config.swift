@@ -71,13 +71,13 @@ public struct Config: Codable {
 		public let port: Int?
 	}
 	public struct Enable: Codable {
-		public let userSelfRegistration: Bool
-		public let adminRoutes: Bool
-		public let userProfileUpdate: Bool
-		public let promptFirstAccount: Bool
-		public let readinessCheck: Bool
-		public let onDevicePWReset: Bool
-		public let oauthRoutes: Bool
+		public let userSelfRegistration: Bool?
+		public let adminRoutes: Bool?
+		public let userProfileUpdate: Bool?
+		public let promptFirstAccount: Bool?
+		public let readinessCheck: Bool?
+		public let onDevicePWReset: Bool?
+		public let oauthRoutes: Bool?
 		public let unvalidatedAccountSignIn: Bool?
 	}
 	public struct ClientApp: Codable {
