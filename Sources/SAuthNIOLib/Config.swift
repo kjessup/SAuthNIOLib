@@ -78,6 +78,7 @@ public struct Config: Codable {
 		public let readinessCheck: Bool
 		public let onDevicePWReset: Bool
 		public let oauthRoutes: Bool
+		public let unvalidatedAccountSignIn: Bool?
 	}
 	public struct ClientApp: Codable {
 		public let name: String
