@@ -15,7 +15,7 @@ let package = Package(
 		.package(url: "https://github.com/PerfectlySoft/Perfect-NIO.git", .branch("master")),
 		.package(url: "https://github.com/PerfectlySoft/Perfect-Notifications.git", from: "4.0.0"),
 		.package(url: "https://github.com/PerfectlySoft/Perfect-CURL.git", from: "5.0.0"),
-		.package(url: "https://github.com/PerfectlySoft/Perfect-SMTP.git", from: "4.0.0"),
+		.package(url: "https://github.com/PerfectlySoft/Perfect-SMTP.git", from: "5.0.0"),
 	],
 	targets: [
 		.target(name: "SAuthNIOLib", dependencies: ["SAuthCodables",
