@@ -216,7 +216,7 @@ extension SAuthHandlers {
 			if let result = try db.transaction({
 				() -> HTTPOutput? in
 				guard let row = try clause.first() else {
-					return ErrorOutput(status: .notFound)
+					return nil
 				}
 				try clause.delete()
 				guard let alias = try aliasTable.where(\AliasBrief.address == row.aliasId).first() else {
